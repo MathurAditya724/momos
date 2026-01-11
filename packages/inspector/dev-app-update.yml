@@ -1,0 +1,4 @@
+owner: momos-dev
+repo: inspector
+provider: github
+updaterCacheDirName: momos-dev-inspector-updater
