@@ -1,0 +1,32 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        "dist/**",
+        "dist-bin/**",
+        ".next/**",
+        "!.next/cache/**",
+        "dist-electron/**"
+      ]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "persistent": true,
+      "cache": false
+    },
+    "@momos/inspector#dev": {
+      "dependsOn": ["service#dev"],
+      "persistent": true,
+      "cache": false
+    },
+    "@momos/inspector#dev:electron": {
+      "dependsOn": ["service#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  },
+  "globalDependencies": ["biome.json", "tsconfig.json", "package.json"]
+}

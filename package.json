@@ -2,8 +2,8 @@
   "name": "@momos/workspace",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @momos/inspector dev",
-    "dev:electron": "pnpm --filter @momos/inspector dev:electron",
+    "dev": "turbo dev --filter @momos/inspector",
+    "dev:electron": "turbo dev:electron --filter @momos/inspector",
     "prepare": "is-ci || husky",
     "format": "biome check --write ."
   },
@@ -11,7 +11,8 @@
     "@biomejs/biome": "^2.3.10",
     "husky": "^9.1.7",
     "is-ci": "^4.1.0",
-    "nano-staged": "^0.9.0"
+    "nano-staged": "^0.9.0",
+    "turbo": "^2.7.4"
   },
   "packageManager": "pnpm@9.15.9"
 }
