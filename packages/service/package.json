@@ -1,0 +1,17 @@
+{
+  "name": "service",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "^0.6.10",
+    "hono": "^4.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "wrangler": "^4.4.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "sandbox",
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.57.0"
+  }
+}
