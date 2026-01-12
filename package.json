@@ -2,8 +2,8 @@
   "name": "@momos/workspace",
   "type": "module",
   "scripts": {
-    "dev": "turbo dev --filter @momos/inspector",
-    "dev:electron": "turbo dev:electron --filter @momos/inspector",
+    "dev": "turbo dev",
+    "dev:electron": "turbo dev:electron",
     "prepare": "is-ci || husky",
     "format": "biome check --write ."
   },

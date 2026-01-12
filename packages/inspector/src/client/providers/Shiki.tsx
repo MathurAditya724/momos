@@ -12,6 +12,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 const BundledLanguages = {
   json: () => import("@shikijs/langs/json"),
+  javascript: () => import("@shikijs/langs/javascript"),
 };
 
 const BundledThemes = {

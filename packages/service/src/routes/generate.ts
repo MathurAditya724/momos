@@ -1,10 +1,8 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { sValidator } from "@hono/standard-validator";
-import { generateText } from "ai";
+import { generateText, Output } from "ai";
 import { Hono } from "hono";
 import { z } from "zod";
-
-const router = new Hono();
 
 const model = anthropic("claude-opus-4-5");
 const bodySchema = z.object({
@@ -12,11 +10,14 @@ const bodySchema = z.object({
   prompt: z.string(),
 });
 
-router.post("/", sValidator("json", bodySchema), async (c) => {
-  const { url, prompt } = c.req.valid("json");
+const router = new Hono().post(
+  "/",
+  sValidator("json", bodySchema),
+  async (c) => {
+    const { url, prompt } = c.req.valid("json");
 
-  const code = await generateText({
-    system: `You are an expert at creating Playwright automation scripts for uptime monitoring and synthetic testing. Your role is to analyze websites and generate reliable, production-ready test code that validates website functionality.
+    const { output } = await generateText({
+      system: `You are an expert at creating Playwright automation scripts for uptime monitoring and synthetic testing. Your role is to analyze websites and generate reliable, production-ready test code that validates website functionality.
 
 ## Your Task
 
@@ -129,14 +130,20 @@ console.log('✓ All login tests passed successfully');
 - Test should fail fast with descriptive errors if something goes wrong
 
 Generate code that is production-ready, maintainable, and provides clear monitoring value.`,
-    model,
-    prompt: `URL - ${url}\n${prompt}`,
-    tools: {
-      web_search: anthropic.tools.webFetch_20250910(),
-    },
-  });
+      model,
+      prompt: `URL - ${url}\n${prompt}`,
+      tools: {
+        web_search: anthropic.tools.webFetch_20250910(),
+      },
+      output: Output.object({
+        schema: z.object({
+          code: z.string(),
+        }),
+      }),
+    });
 
-  return c.json(code);
-});
+    return c.json(output);
+  }
+);
 
 export default router;
