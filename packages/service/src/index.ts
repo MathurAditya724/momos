@@ -43,8 +43,6 @@ app.get("/", async (c) => {
   const data = JSON.parse(fetchVersion.stdout);
   const { webSocketDebuggerUrl } = data;
 
-  console.log(webSocketDebuggerUrl);
-
   await sandbox.writeFile(
     "/workspace/index.js",
     `import { chromium } from 'playwright';
