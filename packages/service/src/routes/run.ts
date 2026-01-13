@@ -2,7 +2,9 @@ import { getSandbox } from "@cloudflare/sandbox";
 import { sValidator } from "@hono/standard-validator";
 import { Hono } from "hono";
 import { z } from "zod";
+import { actionScriptSchema } from "../schemas";
 import type { Env } from "../types/env";
+import { parseScript } from "../utils/script-parser";
 
 async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3) {
   let delay = 1000;
@@ -18,15 +20,16 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3) {
   throw new Error("Failed to execute function after retries");
 }
 
-const bodySchema = z.object({
-  code: z.string(),
-});
-
 const router = new Hono<Env>().post(
   "/",
-  sValidator("json", bodySchema),
+  sValidator(
+    "json",
+    z.object({
+      script: actionScriptSchema,
+    })
+  ),
   async (c) => {
-    const { code } = c.req.valid("json");
+    const { script } = c.req.valid("json");
 
     // Get or create a sandbox instance
     const sandbox = getSandbox(c.env.Sandbox, "my-sandbox");
@@ -53,7 +56,8 @@ const router = new Hono<Env>().post(
 
    async function main() {
     const browser = await chromium.connectOverCDP('${webSocketDebuggerUrl}');
-    ${code}
+    const page = await browser.newPage()
+    ${parseScript(script)}
     await browser.close();
   }
     main();`

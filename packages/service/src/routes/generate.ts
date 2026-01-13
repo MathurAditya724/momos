@@ -3,6 +3,7 @@ import { sValidator } from "@hono/standard-validator";
 import { generateText, Output } from "ai";
 import { Hono } from "hono";
 import { z } from "zod";
+import { actionScriptSchema } from "../schemas";
 
 const model = anthropic("claude-opus-4-5");
 const bodySchema = z.object({
@@ -137,7 +138,7 @@ Generate code that is production-ready, maintainable, and provides clear monitor
       },
       output: Output.object({
         schema: z.object({
-          code: z.string(),
+          script: actionScriptSchema,
         }),
       }),
     });
