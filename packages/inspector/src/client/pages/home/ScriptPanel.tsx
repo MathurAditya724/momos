@@ -1,5 +1,5 @@
 import type { actionScriptSchema } from "@momos/service";
-import { Globe, type LucideIcon, MousePointer, Play, Sparkles } from "lucide-react";
+import { Clock, Globe, type LucideIcon, MousePointer, Play, Sparkles } from "lucide-react";
 import type { z } from "zod";
 import { Badge } from "@/client/components/ui/badge";
 import { Button } from "@/client/components/ui/button";
@@ -32,6 +32,14 @@ const ACTION_CONFIG: Record<string, ActionConfig> = {
     colorClass: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400",
     getDetails: (action) => [
       { label: "Selector", value: (action as { selector: string }).selector },
+    ],
+  },
+  sleep: {
+    label: "Sleep",
+    icon: Clock,
+    colorClass: "bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400",
+    getDetails: (action) => [
+      { label: "Duration", value: `${(action as { milliseconds: number }).milliseconds}ms` },
     ],
   },
 };

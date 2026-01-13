@@ -3,6 +3,7 @@ import { z } from "zod";
 export const Actions = {
   CLICK: "click",
   GOTO: "goto",
+  SLEEP: "sleep",
 } as const;
 
 export const clickActionSchema = z.object({
@@ -15,7 +16,14 @@ export const gotoActionSchema = z.object({
   url: z.string(),
 });
 
+export const sleepActionSchema = z.object({
+  type: z.literal(Actions.SLEEP),
+  milliseconds: z.number(),
+});
+
 export const actionScriptSchemaV1 = z.object({
   version: z.literal("1.0.0"),
-  actions: z.array(z.union([clickActionSchema, gotoActionSchema])),
+  actions: z.array(
+    z.union([clickActionSchema, gotoActionSchema, sleepActionSchema])
+  ),
 });
