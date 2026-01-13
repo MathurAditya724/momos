@@ -1,7 +1,7 @@
 import type { actionScriptSchema } from "@momos/service";
 import { Globe, Sparkles } from "lucide-react";
 import { nanoid } from "nanoid";
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import type { z } from "zod";
 import {
   Conversation,
@@ -23,6 +23,14 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/client/components/ai-elements/prompt-input";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolOutput,
+  type ToolState,
+} from "@/client/components/ai-elements/tool";
+import ToogleThemeIconButton from "@/client/components/layout/ToogleTheme";
 import { Badge } from "@/client/components/ui/badge";
 import { Input } from "@/client/components/ui/input";
 
@@ -34,10 +42,19 @@ export type GenerateValues = {
   previousScript?: Script;
 };
 
+export type ToolCallInfo = {
+  id: string;
+  toolName: string;
+  status: "calling" | "completed" | "error";
+  output?: unknown;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  isStreaming?: boolean;
+  toolCalls?: ToolCallInfo[];
 };
 
 interface ChatPanelProps {
@@ -47,7 +64,25 @@ interface ChatPanelProps {
 }
 
 export interface ChatPanelRef {
-  addAssistantMessage: (message: string) => void;
+  startStreamingMessage: () => void;
+  updateStreamingMessage: (text: string) => void;
+  finishStreamingMessage: () => void;
+  addToolCall: (toolCall: ToolCallInfo) => void;
+  updateToolCall: (id: string, update: Partial<ToolCallInfo>) => void;
+}
+
+// Map our status to Tool component state
+function getToolState(status: ToolCallInfo["status"]): ToolState {
+  switch (status) {
+    case "calling":
+      return "input-streaming";
+    case "completed":
+      return "output-available";
+    case "error":
+      return "output-error";
+    default:
+      return "calling";
+  }
 }
 
 export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
@@ -55,16 +90,67 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     const [url, setUrl] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [text, setText] = useState("");
+    const streamingIdRef = useRef<string | null>(null);
 
-    // Expose method to add assistant message from parent
+    // Expose streaming methods to parent
     useImperativeHandle(ref, () => ({
-      addAssistantMessage: (message: string) => {
+      startStreamingMessage: () => {
+        const id = nanoid();
+        streamingIdRef.current = id;
         const assistantMessage: ChatMessage = {
-          id: nanoid(),
+          id,
           role: "assistant",
-          content: message,
+          content: "",
+          isStreaming: true,
+          toolCalls: [],
         };
         setMessages((prev) => [...prev, assistantMessage]);
+      },
+      updateStreamingMessage: (newText: string) => {
+        if (!streamingIdRef.current) return;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingIdRef.current
+              ? { ...msg, content: newText }
+              : msg,
+          ),
+        );
+      },
+      finishStreamingMessage: () => {
+        if (!streamingIdRef.current) return;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingIdRef.current
+              ? { ...msg, isStreaming: false }
+              : msg,
+          ),
+        );
+        streamingIdRef.current = null;
+      },
+      addToolCall: (toolCall: ToolCallInfo) => {
+        if (!streamingIdRef.current) return;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingIdRef.current
+              ? { ...msg, toolCalls: [...(msg.toolCalls || []), toolCall] }
+              : msg,
+          ),
+        );
+      },
+      updateToolCall: (id: string, update: Partial<ToolCallInfo>) => {
+        if (!streamingIdRef.current) return;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === streamingIdRef.current
+              ? {
+                  ...msg,
+                  toolCalls: msg.toolCalls?.map((tc) =>
+                    tc.id === id ? { ...tc, ...update } : tc,
+                  ),
+                }
+              : msg,
+          ),
+        );
       },
     }));
 
@@ -92,7 +178,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     return (
       <div className="flex h-full flex-col">
         {/* URL Input Header */}
-        <div className="shrink-0 border-b p-3">
+        <div className="shrink-0 border-b px-3">
           <div className="flex items-center gap-2">
             <Globe className="size-4 text-muted-foreground" />
             <Input
@@ -102,6 +188,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               onChange={(e) => setUrl(e.target.value)}
               className="h-8 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
             />
+            <ToogleThemeIconButton />
           </div>
         </div>
 
@@ -119,12 +206,60 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 <Message key={msg.id} from={msg.role}>
                   <MessageContent>
                     {msg.role === "assistant" ? (
-                      <div className="flex items-start gap-2">
-                        <Badge variant="secondary" className="shrink-0">
-                          <Sparkles className="mr-1 size-3" />
-                          Agent
-                        </Badge>
-                        <MessageResponse>{msg.content}</MessageResponse>
+                      <div className="space-y-3">
+                        {/* Agent badge and content */}
+                        <div className="flex items-start gap-2">
+                          <Badge variant="secondary" className="shrink-0">
+                            <Sparkles className="mr-1 size-3" />
+                            Agent
+                          </Badge>
+                          <div className="min-w-0 flex-1">
+                            {msg.content ? (
+                              <MessageResponse>{msg.content}</MessageResponse>
+                            ) : msg.isStreaming ? (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <span>Generating script</span>
+                                <span className="flex gap-1">
+                                  <span
+                                    className="size-1.5 animate-bounce rounded-full bg-current"
+                                    style={{ animationDelay: "0ms" }}
+                                  />
+                                  <span
+                                    className="size-1.5 animate-bounce rounded-full bg-current"
+                                    style={{ animationDelay: "150ms" }}
+                                  />
+                                  <span
+                                    className="size-1.5 animate-bounce rounded-full bg-current"
+                                    style={{ animationDelay: "300ms" }}
+                                  />
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Tool calls */}
+                        {msg.toolCalls && msg.toolCalls.length > 0 && (
+                          <div className="space-y-2">
+                            {msg.toolCalls.map((toolCall) => (
+                              <Tool
+                                key={toolCall.id}
+                                state={getToolState(toolCall.status)}
+                                defaultOpen={false}
+                              >
+                                <ToolHeader
+                                  type={toolCall.toolName}
+                                  state={getToolState(toolCall.status)}
+                                />
+                                {toolCall.output !== undefined && (
+                                  <ToolContent>
+                                    <ToolOutput output={toolCall.output} />
+                                  </ToolContent>
+                                )}
+                              </Tool>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <MessageResponse>{msg.content}</MessageResponse>
@@ -161,7 +296,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               </PromptInputTools>
               <PromptInputSubmit
                 disabled={!text.trim() || isLoading}
-                status={isLoading ? "submitted" : "ready"}
+                status={isLoading ? "streaming" : "ready"}
               />
             </PromptInputFooter>
           </PromptInput>

@@ -148,26 +148,30 @@ function ActionBlock({ action, index }: { action: Action; index: number }) {
 
 function ScriptSkeleton() {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-5 w-16" />
-        <Skeleton className="h-4 w-20" />
+    <div className="flex h-full min-h-32 flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="relative">
+        <Sparkles className="size-10 animate-pulse" />
+        <div className="absolute -right-1 -top-1 size-3 animate-ping rounded-full bg-primary" />
       </div>
-      <div className="space-y-2">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-lg border bg-card p-3">
-            <div className="flex items-start gap-3">
-              <Skeleton className="size-8 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="size-7 rounded-md" />
-                  <Skeleton className="h-5 w-16" />
-                </div>
-                <Skeleton className="h-4 w-3/4" />
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="text-center">
+        <p className="font-medium">Generating script...</p>
+        <p className="mt-1 text-xs">
+          Analyzing your request and building automation actions
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <div
+          className="size-2 animate-bounce rounded-full bg-primary"
+          style={{ animationDelay: "0ms" }}
+        />
+        <div
+          className="size-2 animate-bounce rounded-full bg-primary"
+          style={{ animationDelay: "150ms" }}
+        />
+        <div
+          className="size-2 animate-bounce rounded-full bg-primary"
+          style={{ animationDelay: "300ms" }}
+        />
       </div>
     </div>
   );

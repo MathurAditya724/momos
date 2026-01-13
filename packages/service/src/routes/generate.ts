@@ -1,6 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { sValidator } from "@hono/standard-validator";
-import { generateText, Output } from "ai";
+import { Output, streamText } from "ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { actionScriptSchema } from "../schemas";
@@ -28,7 +28,7 @@ const router = new Hono().post(
       )}\n\`\`\``;
     }
 
-    const { output } = await generateText({
+    const result = streamText({
       system: `You are an expert at creating Playwright automation scripts for uptime monitoring and synthetic testing. Your role is to analyze websites and generate reliable, production-ready test code that validates website functionality.
 
 ${
@@ -160,12 +160,12 @@ Generate code that is production-ready, maintainable, and provides clear monitor
             .describe(
               "A message to the user explaining the script and changes made."
             ),
-          script: actionScriptSchema,
+          script: actionScriptSchema.optional(),
         }),
       }),
     });
 
-    return c.json(output);
+    return result.toUIMessageStreamResponse();
   }
 );
 
