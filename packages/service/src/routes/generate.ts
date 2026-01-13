@@ -9,16 +9,33 @@ const model = anthropic("claude-opus-4-5");
 const bodySchema = z.object({
   url: z.url(),
   prompt: z.string(),
+  previousScript: actionScriptSchema.optional(),
 });
 
 const router = new Hono().post(
   "/",
   sValidator("json", bodySchema),
   async (c) => {
-    const { url, prompt } = c.req.valid("json");
+    const { url, prompt, previousScript } = c.req.valid("json");
+
+    // Build the user prompt with context
+    let userPrompt = `URL - ${url}\n${prompt}`;
+    if (previousScript) {
+      userPrompt += `\n\n## Current Script (modify this based on the user's request)\n\`\`\`json\n${JSON.stringify(
+        previousScript,
+        null,
+        2
+      )}\n\`\`\``;
+    }
 
     const { output } = await generateText({
       system: `You are an expert at creating Playwright automation scripts for uptime monitoring and synthetic testing. Your role is to analyze websites and generate reliable, production-ready test code that validates website functionality.
+
+${
+  previousScript
+    ? "The user has provided an existing script. Modify it according to their request - you can add, remove, or update actions as needed."
+    : ""
+}
 
 ## Your Task
 
@@ -132,12 +149,17 @@ console.log('✓ All login tests passed successfully');
 
 Generate code that is production-ready, maintainable, and provides clear monitoring value.`,
       model,
-      prompt: `URL - ${url}\n${prompt}`,
+      prompt: userPrompt,
       tools: {
         web_search: anthropic.tools.webFetch_20250910(),
       },
       output: Output.object({
         schema: z.object({
+          message: z
+            .string()
+            .describe(
+              "A message to the user explaining the script and changes made."
+            ),
           script: actionScriptSchema,
         }),
       }),

@@ -1,6 +1,6 @@
 import type { actionScriptSchema } from "@momos/service";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { z } from "zod";
 import {
   ResizableHandle,
@@ -8,26 +8,32 @@ import {
   ResizablePanelGroup,
 } from "@/client/components/ui/resizable";
 import { client } from "@/client/config/endpoint";
-import { type FormValues, GenerateForm } from "./GenerateForm";
+import { ChatPanel, type ChatPanelRef, type GenerateValues } from "./ChatPanel";
 import { OutputPanel, type RunResponse } from "./OutputPanel";
 import { ScriptPanel } from "./ScriptPanel";
 
 type Script = z.infer<typeof actionScriptSchema>;
 
 export default function HomePage() {
+  const chatPanelRef = useRef<ChatPanelRef>(null);
   const [generatedScript, setGeneratedScript] = useState<Script | null>(null);
   const [runResponse, setRunResponse] = useState<RunResponse | null>(null);
 
   const generateMutation = useMutation({
-    mutationFn: async (values: FormValues) => {
+    mutationFn: async (values: GenerateValues) => {
       const response = await client.generate.$post({
         json: values,
       });
-      return response.json() as unknown as Promise<{ script: Script }>;
+      return response.json() as unknown as Promise<{
+        message: string;
+        script: Script;
+      }>;
     },
     onSuccess: (data) => {
       setGeneratedScript(data.script);
       setRunResponse(null);
+      // Add assistant message to chat
+      chatPanelRef.current?.addAssistantMessage(data.message);
     },
   });
 
@@ -43,7 +49,7 @@ export default function HomePage() {
     },
   });
 
-  const handleGenerate = (values: FormValues) => {
+  const handleGenerate = (values: GenerateValues) => {
     generateMutation.mutate(values);
   };
 
@@ -56,11 +62,13 @@ export default function HomePage() {
   return (
     <div className="size-full">
       <ResizablePanelGroup direction="horizontal">
-        {/* Left Panel - Form */}
+        {/* Left Panel - Chat */}
         <ResizablePanel defaultSize={35} minSize={25}>
-          <GenerateForm
+          <ChatPanel
+            ref={chatPanelRef}
             onGenerate={handleGenerate}
             isLoading={generateMutation.isPending}
+            currentScript={generatedScript}
           />
         </ResizablePanel>
 
