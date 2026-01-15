@@ -127,39 +127,59 @@ async function main() {
   const browser = await chromium.connectOverCDP('${webSocketDebuggerUrl}');
   const context = browser.contexts()[0];
   const page = context.pages()[0] || await context.newPage();
+  page.on('console', msg => console.log(msg.text()));
+  page.on("request", req => console.log(req.url()));
 
-  // Helper to inject Sentry and Spotlight after page navigation
-  async function addSpotlight(page) {
-    // Add Sentry SDK
-    await page.addScriptTag({
-      url: 'https://browser.sentry-cdn.com/10.33.0/bundle.tracing.min.js',
-      type: 'text/javascript',
-    });
+  // Inject Sentry/Spotlight on every page navigation via addInitScript
+  await page.addInitScript(() => {
+    // Skip if already initialized
+    if (window.__sentryInitialized) return;
+    window.__sentryInitialized = true;
 
-    // Add Spotlight integration
-    await page.addScriptTag({
-      url: 'https://browser.sentry-cdn.com/10.33.0/spotlight.min.js',
-      type: 'text/javascript',
-    });
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.crossOrigin = 'anonymous';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
 
-    // Initialize Sentry with Spotlight
-    await page.evaluate(() => {
-      if (window.Sentry) {
-        window.Sentry.init({
-          dsn: "",
-          sendDefaultPii: true,
-          spotlight: "http://localhost:8969/stream",
-          enableLogs: true,
-          integrations: [
-            window.Sentry.browserTracingIntegration(),
-            window.Sentry.spotlightBrowserIntegration()
-          ],
-          tracesSampleRate: 1.0,
-        });
-        console.log("Sentry initialized in page");
+    async function initSentry() {
+      try {
+        // Load both scripts
+        await loadScript('https://browser.sentry-cdn.com/10.33.0/bundle.tracing.min.js');
+        await loadScript('https://browser.sentry-cdn.com/10.33.0/spotlight.min.js');
+
+        // Initialize Sentry
+        if (window.Sentry) {
+          window.Sentry.init({
+            dsn: "",
+            sendDefaultPii: true,
+            spotlight: true,
+            enableLogs: true,
+            integrations: [
+              window.Sentry.browserTracingIntegration(),
+              window.Sentry.spotlightBrowserIntegration()
+            ],
+            tracesSampleRate: 1.0,
+          });
+          console.log("Sentry initialized in page");
+        }
+      } catch (e) {
+        console.error("Failed to initialize Sentry:", e);
       }
-    });
-  }
+    }
+
+    // Wait for head to be available, then initialize
+    if (document.head) {
+      initSentry();
+    } else {
+      document.addEventListener('DOMContentLoaded', initSentry);
+    }
+  });
 
   // Helper function to capture a step
   async function captureStep(index, action, details) {
