@@ -2,6 +2,10 @@
   "name": "sandbox",
   "type": "module",
   "dependencies": {
-    "playwright": "^1.57.0"
+    "@sentry/browser": "^10.33.0",
+    "playwright": "^1.57.0",
+    "@spotlightjs/spotlight": "^4.10.0",
+    "hono": "^4.11.4",
+    "@hono/node-server": "^1.19.9"
   }
 }
