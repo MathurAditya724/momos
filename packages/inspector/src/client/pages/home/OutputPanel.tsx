@@ -1,6 +1,7 @@
-import type { TraceData } from "@momos/service";
-import { ImageIcon, Play, Terminal } from "lucide-react";
+import type { SpotlightData, TraceData } from "@momos/service";
+import { Bug, ImageIcon, Play, Terminal } from "lucide-react";
 import { useState } from "react";
+import { SpotlightViewer } from "@/client/components/SpotlightViewer";
 import { TraceViewer } from "@/client/components/TraceViewer";
 import { Button } from "@/client/components/ui/button";
 import { ScrollArea } from "@/client/components/ui/scroll-area";
@@ -12,6 +13,7 @@ export interface RunResponse {
   stderr: string;
   exitCode: number;
   trace?: TraceData | null;
+  spotlight?: SpotlightData | null;
 }
 
 interface OutputPanelProps {
@@ -19,14 +21,12 @@ interface OutputPanelProps {
   isLoading: boolean;
 }
 
-type Tab = "console" | "trace";
+type Tab = "console" | "trace" | "spotlight";
 
 export function OutputPanel({ response, isLoading }: OutputPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>("trace");
   const hasTrace = response?.trace && response.trace.steps.length > 0;
-
-  // Switch to trace tab when trace becomes available
-  // Keep console tab if there's no trace
+  const hasSpotlight = response?.spotlight && response.spotlight.length > 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -47,6 +47,23 @@ export function OutputPanel({ response, isLoading }: OutputPanelProps) {
             {hasTrace && (
               <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs text-primary">
                 {response.trace!.steps.length}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 gap-1.5 px-2",
+              activeTab === "spotlight" && "bg-muted"
+            )}
+            onClick={() => setActiveTab("spotlight")}
+          >
+            <Bug className="size-3.5" />
+            Spotlight
+            {hasSpotlight && (
+              <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs text-primary">
+                {response.spotlight!.length}
               </span>
             )}
           </Button>
@@ -78,29 +95,52 @@ export function OutputPanel({ response, isLoading }: OutputPanelProps) {
       </div>
 
       {/* Content */}
-      {activeTab === "trace" ? (
-        <div className="min-h-0 flex-1">
-          {isLoading ? (
+      <div className="min-h-0 flex-1">
+        {activeTab === "trace" ? (
+          isLoading ? (
             <TraceSkeleton />
           ) : hasTrace ? (
             <TraceViewer trace={response.trace!} />
           ) : (
             <TracePlaceholder hasResponse={!!response} />
-          )}
-        </div>
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="p-4">
-            {isLoading ? (
-              <OutputSkeleton />
-            ) : response ? (
-              <ResponseOutput response={response} />
-            ) : (
-              <OutputPlaceholder />
-            )}
-          </div>
-        </ScrollArea>
-      )}
+          )
+        ) : activeTab === "spotlight" ? (
+          isLoading ? (
+            <OutputSkeleton />
+          ) : hasSpotlight ? (
+            <SpotlightViewer data={response.spotlight!} />
+          ) : (
+            <SpotlightPlaceholder hasResponse={!!response} />
+          )
+        ) : (
+          <ScrollArea className="h-full">
+            <div className="p-4">
+              {isLoading ? (
+                <OutputSkeleton />
+              ) : response ? (
+                <ResponseOutput response={response} />
+              ) : (
+                <OutputPlaceholder />
+              )}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SpotlightPlaceholder({ hasResponse }: { hasResponse: boolean }) {
+  return (
+    <div className="flex h-full items-center justify-center text-muted-foreground">
+      <div className="text-center">
+        <Bug className="mx-auto mb-2 size-8 opacity-50" />
+        <p className="text-sm">
+          {hasResponse
+            ? "No Spotlight events captured"
+            : "Run the script to see Spotlight events"}
+        </p>
+      </div>
     </div>
   );
 }

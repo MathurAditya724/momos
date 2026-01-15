@@ -4,12 +4,15 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { actionScriptSchema } from "../schemas";
 import type { Env } from "../types/env";
+import type { SpotlightData } from "../types/spotlight";
 import type { TraceData } from "../types/trace";
 import { parseScript } from "../utils/script-parser";
 
-// Markers for extracting trace data from stdout
+// Markers for extracting trace and spotlight data from stdout
 const TRACE_START_MARKER = "__TRACE_START__";
 const TRACE_END_MARKER = "__TRACE_END__";
+const SPOTLIGHT_START_MARKER = "__SPOTLIGHT_START__";
+const SPOTLIGHT_END_MARKER = "__SPOTLIGHT_END__";
 
 async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3) {
   let delay = 1000;
@@ -26,32 +29,48 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3) {
 }
 
 /**
- * Parse trace data from stdout
+ * Parse trace and spotlight data from stdout
  */
-function parseTraceFromStdout(stdout: string): {
+function parseDataFromStdout(stdout: string): {
   trace: TraceData | null;
+  spotlight: SpotlightData | null;
   cleanStdout: string;
 } {
+  let cleanStdout = stdout;
+  let trace: TraceData | null = null;
+  let spotlight: SpotlightData | null = null;
+
+  // Parse Trace
   const traceRegex = new RegExp(
     `${TRACE_START_MARKER}([\\s\\S]*?)${TRACE_END_MARKER}`
   );
-  const match = stdout.match(traceRegex);
+  const traceMatch = cleanStdout.match(traceRegex);
 
-  if (!match) {
-    return { trace: null, cleanStdout: stdout };
+  if (traceMatch) {
+    try {
+      trace = JSON.parse(traceMatch[1].trim());
+      cleanStdout = cleanStdout.replace(traceRegex, "").trim();
+    } catch (e) {
+      console.error("Failed to parse trace data:", e);
+    }
   }
 
-  let trace: TraceData | null = null;
-  try {
-    trace = JSON.parse(match[1].trim());
-  } catch (e) {
-    console.error("Failed to parse trace data:", e);
+  // Parse Spotlight
+  const spotlightRegex = new RegExp(
+    `${SPOTLIGHT_START_MARKER}([\\s\\S]*?)${SPOTLIGHT_END_MARKER}`
+  );
+  const spotlightMatch = cleanStdout.match(spotlightRegex);
+
+  if (spotlightMatch) {
+    try {
+      spotlight = JSON.parse(spotlightMatch[1].trim());
+      cleanStdout = cleanStdout.replace(spotlightRegex, "").trim();
+    } catch (e) {
+      console.error("Failed to parse spotlight data:", e);
+    }
   }
 
-  // Remove trace data from stdout
-  const cleanStdout = stdout.replace(traceRegex, "").trim();
-
-  return { trace, cleanStdout };
+  return { trace, spotlight, cleanStdout };
 }
 
 /**
@@ -62,6 +81,37 @@ function generateScriptWithTrace(
   actionCode: string
 ): string {
   return `import { chromium } from 'playwright';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { createSpotlightBuffer, pushToSpotlightBuffer } from '@spotlightjs/spotlight/sdk';
+
+// Initialize Spotlight Server
+const buffer = createSpotlightBuffer(1000);
+const app = new Hono();
+
+app.use(cors());
+
+app.post('/stream', async (c) => {
+  let contentType = c.req.header('content-type')?.split(';')[0].toLowerCase();
+  
+  if (c.req.query('sentry_client')?.startsWith('sentry.javascript.browser')) {
+    contentType = 'application/x-sentry-envelope';
+  }
+
+  const container = pushToSpotlightBuffer({
+    spotlightBuffer: buffer,
+    body: Buffer.from(await c.req.arrayBuffer()),
+    encoding: c.req.header('Content-Encoding'),
+    contentType,
+    userAgent: c.req.header('User-Agent'),
+  });
+
+  return c.body(null, 200);
+});
+
+const server = serve({ fetch: app.fetch, port: 8969 });
+console.log('Spotlight server started on port 8969');
 
 // Trace data structure
 const trace = {
@@ -77,6 +127,39 @@ async function main() {
   const browser = await chromium.connectOverCDP('${webSocketDebuggerUrl}');
   const context = browser.contexts()[0];
   const page = context.pages()[0] || await context.newPage();
+
+  // Helper to inject Sentry and Spotlight after page navigation
+  async function addSpotlight(page) {
+    // Add Sentry SDK
+    await page.addScriptTag({
+      url: 'https://browser.sentry-cdn.com/10.33.0/bundle.tracing.min.js',
+      type: 'text/javascript',
+    });
+
+    // Add Spotlight integration
+    await page.addScriptTag({
+      url: 'https://browser.sentry-cdn.com/10.33.0/spotlight.min.js',
+      type: 'text/javascript',
+    });
+
+    // Initialize Sentry with Spotlight
+    await page.evaluate(() => {
+      if (window.Sentry) {
+        window.Sentry.init({
+          dsn: "",
+          sendDefaultPii: true,
+          spotlight: "http://localhost:8969/stream",
+          enableLogs: true,
+          integrations: [
+            window.Sentry.browserTracingIntegration(),
+            window.Sentry.spotlightBrowserIntegration()
+          ],
+          tracesSampleRate: 1.0,
+        });
+        console.log("Sentry initialized in page");
+      }
+    });
+  }
 
   // Helper function to capture a step
   async function captureStep(index, action, details) {
@@ -124,7 +207,21 @@ async function main() {
     // Output trace as JSON with markers
     console.log('${TRACE_START_MARKER}' + JSON.stringify(trace) + '${TRACE_END_MARKER}');
 
+    // Output Spotlight data
+    const events = buffer.read();
+    // Serialize events to JSON (convert buffers/maps to plain objects if needed)
+    const spotlightData = events.map(container => ({
+      envelopeId: container.getParsedEnvelope().envelope[0].event_id,
+      timestamp: Date.now(), // Approximate if not in header
+      type: container.getEventTypesString(),
+      data: container.getParsedEnvelope(),
+      headers: {} 
+    }));
+    
+    console.log('${SPOTLIGHT_START_MARKER}' + JSON.stringify(spotlightData) + '${SPOTLIGHT_END_MARKER}');
+
     await browser.close();
+    server.close(); 
   }
 }
 
@@ -172,14 +269,17 @@ const router = new Hono<Env>().post(
 
     const result = await sandbox.exec("node /workspace/index.js");
 
-    // Parse trace from stdout
-    const { trace, cleanStdout } = parseTraceFromStdout(result.stdout);
+    // Parse trace and spotlight from stdout
+    const { trace, spotlight, cleanStdout } = parseDataFromStdout(
+      result.stdout
+    );
 
     return Response.json({
       exitCode: result.exitCode,
       stdout: cleanStdout,
       stderr: result.stderr,
       trace,
+      spotlight,
     });
   }
 );

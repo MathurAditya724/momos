@@ -50,6 +50,7 @@ export function parseScript(script: z.infer<typeof actionScriptSchema>) {
         break;
       case Actions.GOTO:
         lines.push(`await page.goto('${escapeForJs(action.url)}');`);
+        lines.push(`await addSpotlight(page);`); // Inject Sentry/Spotlight after navigation
         break;
       case Actions.SLEEP:
         lines.push(`await page.waitForTimeout(${action.milliseconds});`);
