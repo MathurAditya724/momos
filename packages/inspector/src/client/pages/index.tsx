@@ -9,7 +9,7 @@ export default function AppRoutes() {
       <Route path="/" element={<HomeLayout />}>
         <Route index element={<HomePage />} />
       </Route>
-      <Route path="/404" element={<NotFound />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

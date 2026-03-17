@@ -30,26 +30,6 @@
   //   "binding": "AI"
   // },
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
-  "containers": [
-    {
-      "class_name": "Sandbox",
-      "image": "./Dockerfile"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "Sandbox",
-        "name": "Sandbox"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "new_sqlite_classes": ["Sandbox"],
-      "tag": "v1"
-    }
-  ]
 }

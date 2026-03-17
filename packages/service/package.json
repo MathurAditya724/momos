@@ -19,15 +19,11 @@
     }
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.9",
-    "@cloudflare/sandbox": "^0.6.10",
     "@hono/standard-validator": "^0.1.5",
-    "ai": "^6.0.27",
     "hono": "^4.11.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21",
     "pkgroll": "^2.21.5",
     "wrangler": "^4.4.0"
   }
