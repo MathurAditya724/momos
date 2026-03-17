@@ -7,7 +7,7 @@ const app = new Hono()
     cors({
       origin: (origin) => origin,
       credentials: true,
-    })
+    }),
   )
   .route("/", routes);
 

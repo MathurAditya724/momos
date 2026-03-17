@@ -30,6 +30,6 @@
   //   "binding": "AI"
   // },
   "observability": {
-    "enabled": true,
-  },
+    "enabled": true
+  }
 }

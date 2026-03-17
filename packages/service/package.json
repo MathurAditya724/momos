@@ -19,12 +19,13 @@
     }
   },
   "dependencies": {
-    "@hono/standard-validator": "^0.1.5",
-    "hono": "^4.11.3",
-    "zod": "^4.1.12"
+    "@hono/standard-validator": "^0.2.2",
+    "hono": "^4.12.8",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "pkgroll": "^2.21.5",
-    "wrangler": "^4.4.0"
+    "pkgroll": "^2.27.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.75.0"
   }
 }

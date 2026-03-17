@@ -1,7 +1,3 @@
 export default function HomePage() {
-  return (
-    <div className="size-full">
-      Hello
-    </div>
-  );
+  return <div className="size-full">Hello</div>;
 }
