@@ -46,3 +46,4 @@ bun-debug.log*
 next-env.d.ts
 
 .turbo
+opencode.jsonc
