@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { cpSync, existsSync, readdirSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { extname, resolve } from "node:path";
 import devServer from "@hono/vite-dev-server";
@@ -29,12 +29,34 @@ export default defineConfig(({ mode }) => {
       buildServer({
         entry: "/src/index.ts",
       }),
+      copyDrizzleMigrations(),
     ],
     resolve: {
       alias: aliases,
     },
   };
 });
+
+// Plugin to copy drizzle migrations folder to dist
+const copyDrizzleMigrations = (): Plugin => {
+  return {
+    name: "copy-drizzle-migrations",
+    apply: "build",
+    closeBundle() {
+      const src = resolve(__dirname, "drizzle");
+      const dest = resolve(__dirname, "dist/drizzle");
+
+      if (existsSync(src)) {
+        cpSync(src, dest, { recursive: true });
+        console.log("Copied drizzle migrations to dist/drizzle");
+      } else {
+        console.warn(
+          "Warning: drizzle folder not found. Run 'bun run db:generate' to create migrations.",
+        );
+      }
+    },
+  };
+};
 
 const buildServer = (options: { entry: string }): Plugin => {
   const virtualEntryId = "virtual:build-entry-module";
@@ -150,9 +172,9 @@ import { createReadStream } from 'node:fs'
     config: async (): Promise<UserConfig> => {
       return {
         ssr: {
-          external: [],
+          external: ["@libsql/client", "drizzle-orm"],
           noExternal: true,
-          target: "webworker",
+          target: "node",
         },
         build: {
           outDir: "./dist",
@@ -161,7 +183,13 @@ import { createReadStream } from 'node:fs'
           ssr: true,
           copyPublicDir: false,
           rollupOptions: {
-            external: [...builtinModules, /^node:/],
+            external: [
+              ...builtinModules,
+              /^node:/,
+              "@libsql/client",
+              "drizzle-orm",
+              /^@libsql\//,
+            ],
             input: virtualEntryId,
             output: {
               entryFileNames: output,
@@ -187,16 +215,13 @@ export const serveStaticHook = (
   const filePaths = options.filePaths ?? [];
 
   for (const path of filePaths) {
+    // NOTE: These are the SPA routes that should serve index.html.
+    // When adding new routes to the React app, update this list to ensure
+    // the production build serves index.html for those routes.
     const _paths =
       path === "/index.html"
         ? [
             "/",
-            "/explorer",
-            "/history",
-            "/tracing",
-            "/settings",
-            "/playground",
-            "/oauth/callback",
           ]
         : [path];
 

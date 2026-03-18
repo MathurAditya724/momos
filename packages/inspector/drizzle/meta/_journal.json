@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1773824708567,
+      "tag": "0000_condemned_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1773857210097,
+      "tag": "0001_nostalgic_falcon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1773857610676,
+      "tag": "0002_mature_elektra",
+      "breakpoints": true
+    }
+  ]
+}
