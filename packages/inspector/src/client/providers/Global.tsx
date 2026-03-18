@@ -5,9 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { z } from "zod/v3";
+import {
+  getConfig,
+  updateConfig as updateServerConfigApi,
+} from "@/client/lib/api";
 
 const GlobalContext = createContext<ReturnType<typeof useGlobalManager> | null>(
   null,
@@ -15,8 +20,11 @@ const GlobalContext = createContext<ReturnType<typeof useGlobalManager> | null>(
 
 export function GlobalProvider({ children }: PropsWithChildren) {
   const value = useGlobalManager();
+
   return (
-    <GlobalContext.Provider value={value}>{children}</GlobalContext.Provider>
+    <GlobalContext.Provider value={value}>
+      {value.isConfigLoading ? <GlobalSkeleton /> : children}
+    </GlobalContext.Provider>
   );
 }
 
@@ -43,22 +51,68 @@ const configSchema = z.object({
 type Config = z.infer<typeof configSchema>;
 const defaultConfig = configSchema.parse({});
 
+type ServerConfig = {
+  cloneDirectory: string;
+};
+
+const defaultServerConfig: ServerConfig = {
+  cloneDirectory: "",
+};
+
 function useGlobalManager() {
   const [config, setConfig] = useLocalStorage<Config>(
     "mglobal-config",
     defaultConfig,
   );
+  const [serverConfig, setServerConfig] =
+    useState<ServerConfig>(defaultServerConfig);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [resolvedTheme, setResolvedTheme] = useState<Theme.LIGHT | Theme.DARK>(
     Theme.LIGHT,
   );
 
-  function toggleTheme(value?: Theme) {
-    const _value =
-      (value ?? config.theme === Theme.LIGHT) ? Theme.DARK : Theme.LIGHT;
-    setConfig({ ...config, theme: _value });
-  }
+  const toggleTheme = useCallback(
+    (value?: Theme) => {
+      const nextTheme =
+        value ?? (config.theme === Theme.LIGHT ? Theme.DARK : Theme.LIGHT);
+      setConfig({ ...config, theme: nextTheme });
+    },
+    [config, setConfig],
+  );
 
   // For dynamic theme value
+  useEffect(() => {
+    let isMounted = true;
+
+    getConfig()
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setServerConfig({
+          cloneDirectory:
+            typeof response.data.clone_directory === "string"
+              ? response.data.clone_directory
+              : "",
+        });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setServerConfig(defaultServerConfig);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsConfigLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -96,12 +150,61 @@ function useGlobalManager() {
     [setConfig],
   );
 
-  return {
-    config,
-    resolvedTheme,
-    toggleTheme,
-    updateConfig,
-  };
+  const updateServerConfig = useCallback(
+    async (partial: Partial<ServerConfig>) => {
+      const payload: Record<string, unknown> = {};
+
+      if ("cloneDirectory" in partial) {
+        payload.clone_directory = partial.cloneDirectory ?? "";
+      }
+
+      const result = await updateServerConfigApi(payload);
+      const cloneDirectory =
+        typeof result.data.clone_directory === "string"
+          ? result.data.clone_directory
+          : "";
+
+      setServerConfig((prev) => ({
+        ...prev,
+        ...partial,
+        cloneDirectory,
+      }));
+    },
+    [],
+  );
+
+  return useMemo(
+    () => ({
+      config,
+      resolvedTheme,
+      serverConfig,
+      isConfigLoading,
+      toggleTheme,
+      updateConfig,
+      updateServerConfig,
+    }),
+    [
+      config,
+      isConfigLoading,
+      resolvedTheme,
+      serverConfig,
+      toggleTheme,
+      updateConfig,
+      updateServerConfig,
+    ],
+  );
+}
+
+function GlobalSkeleton() {
+  return (
+    <div className="min-h-screen p-8">
+      <div className="mx-auto w-full max-w-4xl space-y-4">
+        <div className="h-10 w-56 animate-pulse rounded-md bg-muted" />
+        <div className="h-24 w-full animate-pulse rounded-md bg-muted" />
+        <div className="h-24 w-full animate-pulse rounded-md bg-muted" />
+      </div>
+    </div>
+  );
 }
 
 export function useGlobal() {

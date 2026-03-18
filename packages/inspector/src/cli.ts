@@ -2,32 +2,27 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
+import { DEFAULT_PORT } from "./shared/constants";
+import { checkHealth, getServerUrl } from "./shared/utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 6274;
+const PORT = Number(process.env.PORT) || DEFAULT_PORT;
 const cwd = process.cwd();
 
 // Migrations folder is at dist/drizzle (copied during build)
 // When running from dist/cli.js, __dirname is dist/, so drizzle/ is a sibling
 const migrationsFolder = join(__dirname, "drizzle");
 
-async function checkHealth(port: number): Promise<boolean> {
-  try {
-    const response = await fetch(`http://localhost:${port}/health`);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function main() {
+  const serverUrl = getServerUrl(PORT);
+
   // Check if server is already running
-  const isRunning = await checkHealth(PORT);
+  const isRunning = await checkHealth(serverUrl);
 
   if (isRunning) {
-    console.log(`Server is already running at http://localhost:${PORT}`);
+    console.log(`Server is already running at ${serverUrl}`);
     console.log(`Working directory: ${cwd}`);
     return;
   }
@@ -58,7 +53,7 @@ async function main() {
       port: PORT,
     },
     (info) => {
-      console.log(`Server running at http://localhost:${info.port}`);
+      console.log(`Server running at ${getServerUrl(info.port)}`);
     },
   );
 }

@@ -1,13 +1,14 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
+import { DEFAULT_PORT, IPC_CHANNELS } from "../../shared/constants";
+import { checkHealth, getServerUrl } from "../../shared/utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 6274;
-const cwd = process.cwd();
+const PORT = Number(process.env.PORT) || DEFAULT_PORT;
 
 // Migrations folder is at dist/drizzle (relative to dist-electron/main/)
 const migrationsFolder = path.join(__dirname, "../../dist/drizzle");
@@ -19,21 +20,64 @@ let serverFailed = false;
 
 const isLinux = process.platform === "linux";
 
-async function checkHealth(port: number): Promise<boolean> {
-  try {
-    const response = await fetch(`http://localhost:${port}/health`);
-    return response.ok;
-  } catch {
-    return false;
-  }
+// Register IPC handlers for renderer communication
+function registerIpcHandlers() {
+  // Open native folder dialog
+  ipcMain.handle(IPC_CHANNELS.SELECT_FOLDER, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+}
+
+function buildMenu() {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        {
+          label: "Settings...",
+          accelerator: "CmdOrCtrl+,",
+          click: () => {
+            mainWindow?.webContents.send(IPC_CHANNELS.OPEN_SETTINGS);
+          },
+        },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [{ role: "minimize" }, { role: "close" }],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 async function startServer(): Promise<void> {
+  const serverUrl = getServerUrl(PORT);
+
   // Check if server is already running
-  const isRunning = await checkHealth(PORT);
+  const isRunning = await checkHealth(serverUrl);
 
   if (isRunning) {
-    console.log(`Server is already running at http://localhost:${PORT}`);
+    console.log(`Server is already running at ${serverUrl}`);
     serverStarted = true;
     return;
   }
@@ -54,7 +98,7 @@ async function startServer(): Promise<void> {
     const { default: createApp } = await import(serverPath);
 
     // Server handles DB initialization internally via middleware
-    const honoApp = createApp({ cwd, migrationsFolder });
+    const honoApp = createApp({ cwd: process.cwd(), migrationsFolder });
 
     serve(
       {
@@ -62,7 +106,7 @@ async function startServer(): Promise<void> {
         port: PORT,
       },
       (info) => {
-        console.log(`Server running at http://localhost:${info.port}`);
+        console.log(`Server running at ${getServerUrl(info.port)}`);
         serverStarted = true;
       },
     );
@@ -75,8 +119,10 @@ async function startServer(): Promise<void> {
 }
 
 async function waitForServer(maxAttempts = 30): Promise<boolean> {
+  const serverUrl = getServerUrl(PORT);
+
   for (let i = 0; i < maxAttempts; i++) {
-    if (await checkHealth(PORT)) {
+    if (await checkHealth(serverUrl)) {
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -85,6 +131,10 @@ async function waitForServer(maxAttempts = 30): Promise<boolean> {
 }
 
 app.whenReady().then(async () => {
+  // Register IPC handlers before creating window
+  registerIpcHandlers();
+  buildMenu();
+
   await startServer();
 
   // Wait for server to be ready if we started it (skip if it failed)
@@ -128,7 +178,7 @@ function createWindow() {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
     // In production, load from the server
-    mainWindow.loadURL(`http://localhost:${PORT}`);
+    mainWindow.loadURL(getServerUrl(PORT));
   }
 
   mainWindow.once("ready-to-show", () => {

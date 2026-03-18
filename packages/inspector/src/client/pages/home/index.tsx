@@ -1,24 +1,37 @@
-import { useQuery } from "@tanstack/react-query";
-import { FolderGit2, Loader2, XCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FolderGit2, FolderOpen, GitBranch, Globe } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { CloneRepoModal } from "@/client/components/CloneRepoModal";
+import { ConnectRemoteModal } from "@/client/components/ConnectRemoteModal";
+import { Logo } from "@/client/components/Logo";
+import { Button } from "@/client/components/ui/button";
+import { Spinner } from "@/client/components/ui/spinner";
+import { apiFetch, updateWorkspace, type Workspace } from "@/client/lib/api";
 
-type Workspace = {
-  id: string;
-  path: string;
-  createdAt: string;
-  updatedAt: string;
+type WorkspacesResponse = {
+  data: Workspace[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
 };
 
-async function fetchWorkspaces(): Promise<Workspace[]> {
-  const response = await fetch("/api/workspaces");
-  if (!response.ok) {
-    throw new Error("Failed to fetch workspaces");
-  }
-  return response.json();
+async function fetchWorkspaces(): Promise<WorkspacesResponse> {
+  return apiFetch<WorkspacesResponse>("/api/workspaces");
 }
 
 export default function HomePage() {
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [remoteModalOpen, setRemoteModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
   const {
-    data: workspaces,
+    data: response,
     isLoading,
     error,
   } = useQuery({
@@ -26,49 +39,126 @@ export default function HomePage() {
     queryFn: fetchWorkspaces,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="size-8 animate-spin" />
-        <p>Loading workspaces...</p>
-      </div>
-    );
-  }
+  const workspaces = response?.data ?? [];
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 text-destructive">
-        <XCircle className="size-8" />
-        <p>Failed to load workspaces</p>
-      </div>
-    );
-  }
+  const handleOpenProject = async () => {
+    if (!window.electronAPI) {
+      toast.error("Open Project is only available in Electron");
+      return;
+    }
 
-  if (!workspaces || workspaces.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
-        <FolderGit2 className="size-8" />
-        <p>No workspaces registered</p>
-      </div>
-    );
-  }
+    const selectedPath = await window.electronAPI.selectFolder();
+    if (selectedPath) {
+      try {
+        const workspace = await apiFetch<Workspace>("/api/workspaces", {
+          method: "POST",
+          body: JSON.stringify({ path: selectedPath }),
+        });
+
+        // Refresh workspaces list
+        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+        navigate(`/${workspace.id}`);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to open project",
+        );
+      }
+    }
+  };
+
+  const handleOpenWorkspace = async (workspace: Workspace) => {
+    try {
+      await updateWorkspace(workspace.id, {}, workspace);
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      navigate(`/${workspace.id}`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to open workspace",
+      );
+    }
+  };
+
+  const handleCloneSuccess = (workspace: Workspace) => {
+    queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    navigate(`/${workspace.id}`);
+  };
+
+  const handleRemoteConnect = () => {
+    queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+  };
 
   return (
-    <div className="flex flex-col items-center gap-6 p-8">
-      <h1 className="text-xl font-semibold text-foreground">Workspaces</h1>
-      <div className="flex flex-col gap-4 w-full max-w-2xl">
-        {workspaces.map((workspace) => (
-          <div
-            key={workspace.id}
-            className="flex items-center gap-3 rounded-lg border bg-card p-4 shadow-sm"
-          >
-            <FolderGit2 className="size-5 text-muted-foreground flex-shrink-0" />
-            <span className="truncate text-sm font-medium text-foreground">
-              {workspace.path}
-            </span>
-          </div>
-        ))}
+    <div className="flex flex-col items-center justify-center min-h-screen p-8">
+      {/* Logo */}
+      <Logo className="w-64 mb-8" />
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 mb-12">
+        <Button
+          onClick={handleOpenProject}
+          disabled={!window.electronAPI}
+          title={!window.electronAPI ? "Only available in Electron" : undefined}
+        >
+          <FolderOpen className="mr-2 h-4 w-4" />
+          Open Project
+        </Button>
+        <Button onClick={() => setCloneModalOpen(true)}>
+          <GitBranch className="mr-2 h-4 w-4" />
+          Clone Repo
+        </Button>
+        <Button variant="outline" onClick={() => setRemoteModalOpen(true)}>
+          <Globe className="mr-2 h-4 w-4" />
+          Connect Remote
+        </Button>
       </div>
+
+      {/* Recent Workspaces */}
+      <div className="w-full max-w-xl">
+        <h3 className="text-sm text-muted-foreground mb-3">
+          Recent workspaces
+        </h3>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner className="h-6 w-6" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-destructive">
+            <p className="text-sm">Failed to load workspaces</p>
+          </div>
+        ) : workspaces.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <FolderGit2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No recent workspaces</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {workspaces.map((workspace) => (
+              <button
+                type="button"
+                key={workspace.id}
+                onClick={() => handleOpenWorkspace(workspace)}
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent text-left transition-colors"
+              >
+                <FolderGit2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="truncate text-sm">{workspace.path}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      <CloneRepoModal
+        open={cloneModalOpen}
+        onOpenChange={setCloneModalOpen}
+        onSuccess={handleCloneSuccess}
+      />
+      <ConnectRemoteModal
+        open={remoteModalOpen}
+        onOpenChange={setRemoteModalOpen}
+        onConnect={handleRemoteConnect}
+      />
     </div>
   );
 }

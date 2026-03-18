@@ -26,6 +26,7 @@ export const config = sqliteTable("config", {
 export const workspace = sqliteTable("workspace", {
   id: text("id").primaryKey(), // nanoid
   path: text("path").unique().notNull(), // Absolute path to repo root
+  serverUrl: text("server_url"), // Optional workspace-specific server URL
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),

@@ -1,8 +1,10 @@
-export type ElectronAPI = {};
+export type ElectronAPI = {
+  selectFolder: () => Promise<string | null>;
+  onOpenSettings: (callback: () => void) => () => void;
+};
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
-    IS_ELECTRON: boolean;
+    electronAPI?: ElectronAPI;
   }
 }
