@@ -146,6 +146,15 @@ import { createReadStream } from 'node:fs'
             return _app.fetch(c.req.raw, c.env, executionCtx)
           })
           mainApp.notFound((c) => {
+            // SPA fallback: serve index.html for non-API GET requests
+            const url = new URL(c.req.url)
+            if (c.req.method === 'GET' && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/health') && !url.pathname.startsWith('/version')) {
+              const { outgoing } = c.env
+              const fileStream = createReadStream(join(import.meta.dirname, '/index.html'))
+              outgoing.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+              fileStream.pipe(outgoing)
+              return RESPONSE_ALREADY_SENT
+            }
             let executionCtx
             try {
               executionCtx = c.executionCtx
@@ -218,12 +227,7 @@ export const serveStaticHook = (
     // NOTE: These are the SPA routes that should serve index.html.
     // When adding new routes to the React app, update this list to ensure
     // the production build serves index.html for those routes.
-    const _paths =
-      path === "/index.html"
-        ? [
-            "/",
-          ]
-        : [path];
+    const _paths = path === "/index.html" ? ["/"] : [path];
 
     for (const _path of _paths) {
       code += `${appName}.get('${_path}', (c) => {

@@ -6,14 +6,23 @@ export type WorkspaceContext = {
 };
 
 export function getBaseUrl(workspace?: WorkspaceContext | null): string {
+  // 1. Workspace-specific server URL takes priority
   if (workspace?.serverUrl) {
     return workspace.serverUrl;
   }
 
   if (typeof window !== "undefined") {
-    return localStorage.getItem(STORAGE_KEYS.REMOTE_URL) || "";
+    // 2. User-configured remote URL from localStorage
+    const stored = localStorage.getItem(STORAGE_KEYS.REMOTE_URL);
+    if (stored) return stored;
+
+    // 3. In Electron, API runs on a dedicated port separate from the renderer
+    if (window.electronAPI) {
+      return getServerUrl();
+    }
   }
 
+  // 4. Web mode — relative URLs (same origin)
   return "";
 }
 

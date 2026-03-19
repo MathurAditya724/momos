@@ -82,18 +82,9 @@ async function startServer(): Promise<void> {
     return;
   }
 
-  // Import the built server app
-  // In production, this will be at ../../dist/index.js relative to dist-electron/main/
-  // In development, we use the dev server URL directly
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
-    // In dev mode, the vite dev server handles the API
-    // We don't need to start the server
-    serverStarted = true;
-    return;
-  }
-
   try {
     // Dynamic import of the built server
+    // In both dev and production, this is at ../../dist/index.js relative to dist-electron/main/
     const serverPath = path.join(__dirname, "../../dist/index.js");
     const { default: createApp } = await import(serverPath);
 
