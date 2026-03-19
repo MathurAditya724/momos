@@ -18,7 +18,7 @@
       "cache": false
     },
     "@momos/inspector#dev:electron": {
-      "dependsOn": ["@momos/service#dev"],
+      "dependsOn": ["@momos/service#build"],
       "persistent": true,
       "cache": false
     }
