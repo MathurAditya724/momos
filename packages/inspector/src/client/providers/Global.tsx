@@ -53,10 +53,14 @@ const defaultConfig = configSchema.parse({});
 
 type ServerConfig = {
   cloneDirectory: string;
+  github: boolean;
+  sentry: boolean;
 };
 
 const defaultServerConfig: ServerConfig = {
   cloneDirectory: "",
+  github: false,
+  sentry: false,
 };
 
 function useGlobalManager() {
@@ -95,6 +99,8 @@ function useGlobalManager() {
             typeof response.data.clone_directory === "string"
               ? response.data.clone_directory
               : "",
+          github: response.data.github === true,
+          sentry: response.data.sentry === true,
         });
       })
       .catch(() => {
@@ -157,18 +163,23 @@ function useGlobalManager() {
       if ("cloneDirectory" in partial) {
         payload.clone_directory = partial.cloneDirectory ?? "";
       }
+      if ("github" in partial) {
+        payload.github = partial.github ?? false;
+      }
+      if ("sentry" in partial) {
+        payload.sentry = partial.sentry ?? false;
+      }
 
       const result = await updateServerConfigApi(payload);
-      const cloneDirectory =
-        typeof result.data.clone_directory === "string"
-          ? result.data.clone_directory
-          : "";
 
-      setServerConfig((prev) => ({
-        ...prev,
-        ...partial,
-        cloneDirectory,
-      }));
+      setServerConfig({
+        cloneDirectory:
+          typeof result.data.clone_directory === "string"
+            ? result.data.clone_directory
+            : "",
+        github: result.data.github === true,
+        sentry: result.data.sentry === true,
+      });
     },
     [],
   );

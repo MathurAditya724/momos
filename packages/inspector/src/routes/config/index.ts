@@ -1,9 +1,9 @@
 import { sValidator } from "@hono/standard-validator";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { config as configTable } from "../server/db/schema";
-import { updateConfigSchema } from "../server/schemas";
-import type { AppEnv } from "../server/types";
+import { config as configTable } from "../../server/db/schema";
+import { updateConfigSchema } from "../../server/schemas";
+import type { AppEnv } from "../../server/types";
 
 const DEFAULT_CONFIG_ID = "default";
 

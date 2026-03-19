@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderGit2, FolderOpen, GitBranch, Globe } from "lucide-react";
+import { FolderOpen, GitBranch, Globe } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -128,20 +128,18 @@ export default function HomePage() {
           </div>
         ) : workspaces.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <FolderGit2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No recent workspaces</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col">
             {workspaces.map((workspace) => (
               <button
                 type="button"
                 key={workspace.id}
                 onClick={() => handleOpenWorkspace(workspace)}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent text-left transition-colors"
+                className="py-1.5 px-2 rounded text-left text-sm text-muted-foreground truncate transition-colors hover:text-foreground hover:bg-muted/50"
               >
-                <FolderGit2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="truncate text-sm">{workspace.path}</span>
+                {workspace.path}
               </button>
             ))}
           </div>

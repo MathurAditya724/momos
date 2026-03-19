@@ -5,6 +5,11 @@ export type Workspace = {
   id: string;
   path: string;
   serverUrl?: string | null;
+  metadata?: {
+    github?: boolean;
+    sentry?: boolean;
+    [key: string]: unknown;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -107,7 +112,10 @@ export async function cloneWorkspace(
 
 export async function updateWorkspace(
   workspaceId: string,
-  payload: { serverUrl?: string | null } = {},
+  payload: {
+    serverUrl?: string | null;
+    metadata?: Record<string, unknown>;
+  } = {},
   workspace?: Workspace | null,
 ): Promise<Workspace> {
   return apiFetch<Workspace>(
@@ -141,6 +149,85 @@ export async function updateConfig(
     method: "PUT",
     body: JSON.stringify({ data }),
   });
+}
+
+// --- Workspace tool status ---
+
+export type ToolState = {
+  installed: boolean;
+  globalEnabled: boolean;
+  workspaceEnabled: boolean;
+};
+
+export type WorkspaceStatus = {
+  github: ToolState;
+  sentry: ToolState;
+};
+
+export async function getWorkspaceStatus(
+  workspaceId: string,
+  workspace?: Workspace | null,
+): Promise<WorkspaceStatus> {
+  return apiFetch<WorkspaceStatus>(
+    `/api/workspaces/${workspaceId}/status`,
+    undefined,
+    workspace,
+  );
+}
+
+export async function enableTool(
+  tool: "github" | "sentry",
+): Promise<ConfigResponse> {
+  return updateConfig({ [tool]: true });
+}
+
+// --- GitHub issues ---
+
+export type GithubIssue = {
+  number: number;
+  title: string;
+  state: "OPEN" | "CLOSED";
+  updatedAt: string;
+  labels: { name: string; color: string }[];
+  url: string;
+};
+
+export async function getGithubIssues(
+  workspaceId: string,
+  workspace?: Workspace | null,
+): Promise<GithubIssue[]> {
+  const result = await apiFetch<{ data: GithubIssue[] }>(
+    `/api/workspaces/${workspaceId}/github/issues`,
+    undefined,
+    workspace,
+  );
+  return result.data;
+}
+
+// --- Sentry issues ---
+
+export type SentryIssue = {
+  id: string;
+  shortId: string;
+  title: string;
+  level: string;
+  count: string;
+  lastSeen: string;
+  permalink: string;
+  status: string;
+  priority: string;
+};
+
+export async function getSentryIssues(
+  workspaceId: string,
+  workspace?: Workspace | null,
+): Promise<SentryIssue[]> {
+  const result = await apiFetch<{ data: SentryIssue[] }>(
+    `/api/workspaces/${workspaceId}/sentry/issues`,
+    undefined,
+    workspace,
+  );
+  return result.data;
 }
 
 // Re-export checkHealth for convenience

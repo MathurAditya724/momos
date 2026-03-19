@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -7,13 +7,17 @@ import { Button } from "@/client/components/ui/button";
 import { Input } from "@/client/components/ui/input";
 import { Label } from "@/client/components/ui/label";
 import { Spinner } from "@/client/components/ui/spinner";
+import { Switch } from "@/client/components/ui/switch";
 import { apiFetch, updateWorkspace, type Workspace } from "@/client/lib/api";
 
 export default function WorkspaceSettingsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const handledErrorRef = useRef(false);
   const [serverUrl, setServerUrl] = useState("");
+  const [githubEnabled, setGithubEnabled] = useState(true);
+  const [sentryEnabled, setSentryEnabled] = useState(true);
 
   const {
     data: workspace,
@@ -29,6 +33,8 @@ export default function WorkspaceSettingsPage() {
   useEffect(() => {
     if (workspace) {
       setServerUrl(workspace.serverUrl ?? "");
+      setGithubEnabled(workspace.metadata?.github !== false);
+      setSentryEnabled(workspace.metadata?.sentry !== false);
     }
   }, [workspace]);
 
@@ -49,11 +55,17 @@ export default function WorkspaceSettingsPage() {
         id,
         {
           serverUrl: serverUrl.trim() ? serverUrl.trim() : null,
+          metadata: {
+            github: githubEnabled,
+            sentry: sentryEnabled,
+          },
         },
         workspace,
       );
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace", id] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-status", id] });
       toast.success("Workspace settings saved");
       navigate(`/${id}`);
     },
@@ -71,9 +83,14 @@ export default function WorkspaceSettingsPage() {
       return false;
     }
 
-    const normalized = serverUrl.trim();
-    return normalized !== (workspace.serverUrl ?? "");
-  }, [serverUrl, workspace]);
+    const serverUrlChanged = serverUrl.trim() !== (workspace.serverUrl ?? "");
+    const githubChanged =
+      githubEnabled !== (workspace.metadata?.github !== false);
+    const sentryChanged =
+      sentryEnabled !== (workspace.metadata?.sentry !== false);
+
+    return serverUrlChanged || githubChanged || sentryChanged;
+  }, [serverUrl, githubEnabled, sentryEnabled, workspace]);
 
   if (isLoading) {
     return (
@@ -113,6 +130,40 @@ export default function WorkspaceSettingsPage() {
             If set, this workspace uses this server before falling back to the
             global remote URL.
           </p>
+        </div>
+
+        <div className="mt-8">
+          <h2 className="mb-4 text-sm font-semibold">Tools</h2>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="github-toggle">GitHub Issues</Label>
+                <p className="text-xs text-muted-foreground">
+                  Show GitHub issues for this workspace
+                </p>
+              </div>
+              <Switch
+                id="github-toggle"
+                checked={githubEnabled}
+                onCheckedChange={setGithubEnabled}
+                disabled={saveMutation.isPending}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="sentry-toggle">Sentry Issues</Label>
+                <p className="text-xs text-muted-foreground">
+                  Show Sentry issues for this workspace
+                </p>
+              </div>
+              <Switch
+                id="sentry-toggle"
+                checked={sentryEnabled}
+                onCheckedChange={setSentryEnabled}
+                disabled={saveMutation.isPending}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end gap-2">

@@ -3,15 +3,64 @@ import { existsSync } from "node:fs";
 import { sValidator } from "@hono/standard-validator";
 import { count, desc, eq, like } from "drizzle-orm";
 import { Hono } from "hono";
-import { generateId, workspace as workspaceTable } from "../server/db";
+import { createMiddleware } from "hono/factory";
+import {
+  generateId,
+  type Workspace,
+  workspace as workspaceTable,
+} from "../../server/db";
 import {
   cloneWorkspaceSchema,
   createWorkspaceSchema,
   idParamSchema,
   listWorkspacesQuerySchema,
   updateWorkspaceSchema,
-} from "../server/schemas";
-import type { AppEnv } from "../server/types";
+} from "../../server/schemas";
+import type { AppEnv } from "../../server/types";
+import githubRoutes from "./github";
+import sentryRoutes from "./sentry";
+import statusRoutes from "./status";
+
+type WorkspaceEnv = AppEnv & {
+  Variables: AppEnv["Variables"] & {
+    workspace: Workspace;
+  };
+};
+
+/**
+ * Middleware that validates and loads a workspace by :id param.
+ * Checks that the workspace exists in DB and its path exists on disk.
+ * Sets c.var.workspace for downstream handlers.
+ */
+export const workspaceMiddleware = createMiddleware<WorkspaceEnv>(
+  async (c, next) => {
+    const id = c.req.param("id");
+    if (!id) {
+      return c.json({ error: "Workspace ID is required" }, 400);
+    }
+
+    const db = c.get("db");
+
+    const result = await db
+      .select()
+      .from(workspaceTable)
+      .where(eq(workspaceTable.id, id))
+      .limit(1);
+
+    if (result.length === 0) {
+      return c.json({ error: "Workspace not found" }, 404);
+    }
+
+    const workspace = result[0];
+    if (!existsSync(workspace.path)) {
+      await db.delete(workspaceTable).where(eq(workspaceTable.id, id));
+      return c.json({ error: "Workspace path no longer exists" }, 410);
+    }
+
+    c.set("workspace", workspace);
+    await next();
+  },
+);
 
 const router = new Hono<AppEnv>();
 
@@ -51,29 +100,16 @@ router.get("/", sValidator("query", listWorkspacesQuerySchema), async (c) => {
   });
 });
 
-// Get a single workspace by ID
-router.get("/:id", sValidator("param", idParamSchema), async (c) => {
-  const db = c.get("db");
-  const { id } = c.req.valid("param");
-
-  const result = await db
-    .select()
-    .from(workspaceTable)
-    .where(eq(workspaceTable.id, id))
-    .limit(1);
-
-  if (result.length === 0) {
-    return c.json({ error: "Workspace not found" }, 404);
-  }
-
-  const workspace = result[0];
-  if (!existsSync(workspace.path)) {
-    await db.delete(workspaceTable).where(eq(workspaceTable.id, id));
-    return c.json({ error: "Workspace path no longer exists" }, 410);
-  }
-
-  return c.json(workspace);
-});
+// Get a single workspace by ID (uses middleware for validation)
+router.get(
+  "/:id",
+  sValidator("param", idParamSchema),
+  workspaceMiddleware,
+  async (c) => {
+    const workspace = c.get("workspace");
+    return c.json(workspace);
+  },
+);
 
 // Create a workspace (or return existing if path already exists)
 router.post("/", sValidator("json", createWorkspaceSchema), async (c) => {
@@ -170,12 +206,24 @@ router.patch(
     const body = c.req.valid("json");
     const { serverUrl } = body;
 
-    const updatePayload: { updatedAt: Date; serverUrl?: string | null } = {
+    const updatePayload: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
     if ("serverUrl" in body) {
       updatePayload.serverUrl = serverUrl;
+    }
+
+    if ("metadata" in body && body.metadata) {
+      // Merge metadata: fetch existing, spread new on top
+      const current = await db
+        .select()
+        .from(workspaceTable)
+        .where(eq(workspaceTable.id, id))
+        .limit(1);
+
+      const existingMetadata = current[0]?.metadata ?? {};
+      updatePayload.metadata = { ...existingMetadata, ...body.metadata };
     }
 
     const result = await db
@@ -208,5 +256,13 @@ router.delete("/:id", sValidator("param", idParamSchema), async (c) => {
 
   return c.json({ success: true });
 });
+
+// Mount tool sub-routes with workspace middleware
+router.use("/:id/status", workspaceMiddleware);
+router.use("/:id/github/*", workspaceMiddleware);
+router.use("/:id/sentry/*", workspaceMiddleware);
+router.route("/:id/status", statusRoutes);
+router.route("/:id/github", githubRoutes);
+router.route("/:id/sentry", sentryRoutes);
 
 export default router;

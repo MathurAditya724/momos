@@ -32,6 +32,7 @@ export type CloneWorkspaceInput = z.infer<typeof cloneWorkspaceSchema>;
 
 export const updateWorkspaceSchema = z.object({
   serverUrl: z.string().url("Invalid server URL").nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
